@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+uploads/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.log
+
+# Env (keep examples)
+.env
+.env.*
+!.env.example
+frontend/.env.local
+backend/.env
+
+# Media / data — NEVER commit
+*.mp4
+*.avi
+*.mov
+*.mkv
+uploads/
+data/
+datasets/
+
+# Model weights — NEVER commit
+*.pt
+*.pth
+*.onnx
+*.bin
+*.ckpt
+models/
+
+# Temp / generated
+tmp/
+temp/
+*.tmp
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
