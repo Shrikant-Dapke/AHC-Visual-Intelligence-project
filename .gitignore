@@ -20,13 +20,16 @@ out/
 frontend/.env.local
 backend/.env
 
-# Media / data — NEVER commit
+# Media / data — NEVER commit (exception: versioned split manifests below)
 *.mp4
 *.avi
 *.mov
 *.mkv
 uploads/
-data/
+data/*
+!data/splits/
+# Feature cache (v1+) is a large regenerable artifact — never commit.
+data/cache/
 datasets/
 
 # Model weights — NEVER commit

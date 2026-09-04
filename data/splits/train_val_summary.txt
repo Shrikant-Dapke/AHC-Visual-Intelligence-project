@@ -1,0 +1,21 @@
+AHC train/val split summary (seed=42, stratified 80/20 by class)
+train: 2537  val: 636  total: 3173  classes: 12
+
+class                                   train   val   val%
+fighting_or_violence                       99    25  20.2%  median-dur(ref) 30.0s
+fire                                       62    15  19.5%  median-dur(ref) 5.8s
+loitering_or_suspicious_presence          240    60  20.0%  median-dur(ref) 29.9s
+normal                                    778   195  20.0%  median-dur(ref) 15.7s
+road_spill_or_debris                      121    30  19.9%  median-dur(ref) 7.3s
+smoke                                      68    17  20.0%  median-dur(ref) 5.8s
+stalled_or_broken_down_vehicle            178    45  20.2%  median-dur(ref) 11.5s
+traffic_accident                          452   113  20.0%  median-dur(ref) 5.0s
+traffic_congestion                        214    54  20.1%  median-dur(ref) 5.4s
+vehicle_blocking_traffic                  118    30  20.3%  median-dur(ref) 11.0s
+waterlogging_or_flood                      76    19  20.0%  median-dur(ref) 5.7s
+wrong_way_driving                         131    33  20.1%  median-dur(ref) 10.5s
+
+duplicates: none (3173 unique keys)
+train/val overlap: none
+test exclusion: 34 test videos, 0 in split
+duration: reference medians only (per-video decode not performed); DO NOT use duration as a feature
