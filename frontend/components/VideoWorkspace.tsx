@@ -2,8 +2,10 @@
 
 import { useRef, useState, type RefObject } from "react";
 import VideoPlayer from "./VideoPlayer";
+import DetectionOverlay from "./DetectionOverlay";
 import { fmtSize } from "../lib/format";
 import type { LiveSnapshot } from "../hooks/useRealtimeVideoAnalysis";
+import type { FrameDetections } from "../../shared/types";
 
 export type FeedPhase = "IDLE" | "VIDEO_READY" | "ANALYZING" | "ANALYSIS_COMPLETE" | "ERROR";
 
@@ -26,6 +28,7 @@ type Props = {
   onReset: () => void;
   onTick: (t: number, dur: number) => void;
   backendDown?: boolean;
+  detections?: FrameDetections[];
 };
 
 export default function VideoWorkspace(props: Props) {
@@ -34,6 +37,7 @@ export default function VideoWorkspace(props: Props) {
     analyzing, anomaly, paused, ended, caption,
     onFile, onStart, onStop, onReplay, onReset, onTick,
     backendDown = false,
+    detections = [],
   } = props;
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
@@ -100,6 +104,9 @@ export default function VideoWorkspace(props: Props) {
             onTick={(t) => onTick(t, videoRef.current?.duration ?? 0)}
             onMeta={() => undefined}
           />
+        )}
+        {previewUrl && detections.length > 0 && (
+          <DetectionOverlay detections={detections} videoRef={videoRef} />
         )}
         <div className={`video-badge ${badge.cls}`}>{badge.text}</div>
       </div>

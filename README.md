@@ -79,7 +79,16 @@ All backend paths are overridable via environment (or `backend/.env`, see `backe
 3. Read the hero: incident class, confidence, and source badge (**CLIP classifier** vs **Motion heuristic** — never confused).
 4. Scrub the incident window (Start—Peak—End chips seek the player), open pre/peak/post evidence, review object counts and track insights.
 
-Small real test clip used for verification: `traffic_accident` video → `vehicle_blocking_traffic` 61.7% (CLIP) with 7 car tracks. Test videos are unlabeled files, so treat demo labels as indicative, not ground truth.
+Small real test clip used for verification: `traffic_accident` video → `vehicle_blocking_traffic` 79.2% (CLIP) with 6 car tracks. Test videos are unlabeled files, so treat demo labels as indicative, not ground truth.
+
+## Official submission
+
+```powershell
+python scripts/make_submission.py --eval-zip <path-to-Evaluation.zip> --out submission_run_01.json
+# backend venv python, from repo root
+```
+
+Reads the Evaluation ZIP in place (per-level `videos.csv`; videos stream via temp one at a time): L1 emits video-level classes with null timestamps (classification-only), L2/L3 emit measured temporal spans with a whole-video fallback when nothing localizes. Validates the schema before writing. Tuning/analysis harness: `scripts/eval_temporal.py` (ground truth, when available, is used for scoring only — never inside inference).
 
 ## API endpoints
 
@@ -92,8 +101,9 @@ Unified result adds (all backward-compatible): `incident_source` (`clip`|`heuris
 
 ## ML / inference architecture
 
-- **Incident classifier (primary):** frozen CLIP ViT-B/32 image embeddings (8 time-sampled letterboxed frames, mean-pooled — duration is never a feature) + multinomial logistic regression (`class_weight=balanced`, seed 42). Trained on 2,537 videos, validated on 636: **accuracy 0.8208, macro-F1 0.7333**, 12 classes, 0 failed videos. See `models/clip_linear_v1/metadata.json` and `scripts/train_clip_classifier.py`. Single-video inference: `python scripts/predict_video.py --video path/to/video.mp4`.
-- **Object evidence (supporting):** pretrained YOLOv8n at ~2 fps with IoU tracking (ByteTrack optional). Detects road classes (car/truck/bus/motorcycle/bicycle/person/traffic light/stop sign) and derives an object-activity window plus pre/peak/post frames. YOLO is evidence, not the classifier — it cannot overwrite the CLIP verdict. CLI: `python scripts/analyze_objects.py --video path/to/video.mp4`.
+- **Incident classifier (primary):** frozen CLIP ViT-B/32 image embeddings (8 time-sampled letterboxed frames, mean-pooled — duration is never a feature) + multinomial logistic regression (`class_weight=balanced`, seed 42). Trained on 2,537 videos, validated on 636: **accuracy 0.8129, macro-F1 0.7264**, 12 classes, 0 failed videos. These are post-correction metrics: the organizer confirmed 108 mislabeled `wrong_way_driving` training/val videos, which were corrected to `normal` in the manifest (88 train + 20 val) and only the linear head was retrained — CLIP was never fine-tuned. See `models/clip_linear_v1/metadata.json` and `scripts/train_clip_classifier.py`. Single-video inference: `python scripts/predict_video.py --video path/to/video.mp4`.
+- **Object evidence (supporting):** pretrained YOLOv8n at ~2 fps with IoU tracking (constant-velocity prediction, conservative fragment stitching, ByteTrack optional). Detects road classes (car/truck/bus/motorcycle/bicycle/person/traffic light/stop sign) and derives an object-activity window plus pre/peak/post frames; per-frame boxes render as a live overlay in the dashboard. YOLO is evidence, not the classifier — it cannot overwrite the CLIP verdict. CLI: `python scripts/analyze_objects.py --video path/to/video.mp4`.
+- **Temporal events (L2/L3 localization):** the frozen CLIP classifier is reused as a coarse-to-fine window scanner (`services/temporal_events.py`) to emit measured incident spans — no retraining, no ground-truth copying. L1 stays classification-only (null timestamps).
 - **Fallback:** the deterministic motion-energy heuristic (`inference/predict.py`) covers CLIP-unavailable operation and always labels its own verdicts as heuristic.
 
 ## Dataset information
@@ -105,7 +115,7 @@ Unified result adds (all backward-compatible): `incident_source` (`clip`|`heuris
 ## Current limitations
 
 - CPU-only inference: roughly ~20 s one-time CLIP encoder load per process, then ~1–2 s CLIP + ~1–2 s YOLO per short clip warm (far slower cold or on long videos); single-worker requests serialize.
-- Aggregate validation metrics only (accuracy 0.8208 / macro-F1 0.7333 in `metadata.json`); fine-grained failure modes (e.g. smoke vs fire) were not separately quantified — demo labels are indicative.
+- Aggregate validation metrics only (accuracy 0.8129 / macro-F1 0.7264 in `metadata.json`, post-correction); fine-grained failure modes (e.g. smoke vs fire) were not separately quantified — demo labels are indicative.
 - Test videos are unlabeled spot-checks, not a scored set.
 - No auth, no DB (in-memory jobs), uploads deleted after analysis; the dashboard does not restore results on page refresh (refetch via `GET /api/results/{job_id}` works while the backend runs).
 - `docker-compose.yml` predates the ML integration (backend image lacks `scripts/`, model weights, and HF cache; compose also expects a `backend/.env` file). Local virtualenvs are the supported demo path until the Docker context is reworked.

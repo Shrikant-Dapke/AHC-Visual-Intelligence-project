@@ -204,6 +204,8 @@ def analyze_video_objects(
     cap = cv2.VideoCapture(str(video_path))
     per_frame: list[dict[str, Any]] = []
     n_analyzed = 0
+    frame_w, frame_h = 0, 0
+    total_raw_detections = 0
     try:
         if not cap.isOpened():
             raise ValueError(f"Unreadable video: {video_path}")
@@ -212,6 +214,8 @@ def analyze_video_objects(
             ok, frame = cap.read()
             if not ok:
                 break
+            if frame_w == 0 and frame is not None and frame.size:
+                frame_h, frame_w = frame.shape[0], frame.shape[1]
             if idx % step == 0:
                 t = idx / native_fps
                 if use_bytetrack:
@@ -219,6 +223,7 @@ def analyze_video_objects(
                 else:
                     dets = detector.detect(frame, idx, t)
                     tracker.update(dets, idx, t)
+                total_raw_detections += len(dets)
                 per_frame.append({
                     "timestamp": round(t, 3),
                     "frame_index": idx,
@@ -249,8 +254,23 @@ def analyze_video_objects(
     window = extract_incident_window(times, scores, duration)
     evidence = save_evidence_frames(video_path, window, ev_dir)
 
-    # --- persistent-object summary ---
-    tracks = tracker.tracks()
+    # --- de-duplicate fragmented identities ---
+    # Raw tracker IDs can fragment when an object is missed for a while and
+    # re-detected. stitch_tracks() merges conservative same-class fragments
+    # and every per-frame observation is rewritten to the canonical ID, so
+    # the counts, the track list AND the overlay all share one identity per
+    # physical object (as far as the heuristic can tell).
+    from app.inference.tracker import stitch_tracks
+
+    raw_tracks = tracker.tracks()
+    tracks, id_map, n_merges = stitch_tracks(raw_tracks)
+    for f in per_frame:
+        for o in f["objects"]:
+            tid = o.get("track_id")
+            if tid is not None and tid in id_map:
+                o["track_id"] = id_map[tid]
+
+    # --- persistent-object summary (UNIQUE canonical tracks, not detections) ---
     by_class: dict[str, set[int]] = {}
     for tr in tracks:
         by_class.setdefault(tr.class_name, set()).add(tr.track_id)
@@ -271,6 +291,36 @@ def analyze_video_objects(
              for p in tr.trajectory
          ]}
         for tr in tracks
+    ]
+    # Tracks alive at the final sampled frame ("currently visible" proxy).
+    last_t = times[-1] if times else 0.0
+    active_ids = sorted({tr.track_id for tr in tracks
+                         if last_t - tr.last_seen <= max(2.0 / sample_fps, 0.6)})
+    longest = max((tr.duration for tr in tracks), default=0.0)
+    largest_move = max((tr.displacement() for tr in tracks), default=0.0)
+    track_summary = {
+        "unique_count": len(tracks),
+        "active_count": len(active_ids),
+        "longest_seconds": round(longest, 2),
+        "largest_movement_px": round(largest_move, 1),
+        "merged_groups": n_merges,
+        "total_raw_detections": total_raw_detections,
+        # True when stitching fired: fragmentation was observed, so even the
+        # canonical count is a heuristic de-duplication, not a census.
+        "fragmented": n_merges > 0,
+    }
+
+    # --- frame-level track observations for the live overlay ---
+    # Normalized 0..1 bboxes so the frontend stays correct at any size.
+    detections = [
+        {"timestamp": f["timestamp"],
+         "tracks": [
+             {"id": o["track_id"], "class": o["class"],
+              "confidence": o["confidence"],
+              "bbox": _normalize_bbox(o["bbox"], frame_w, frame_h)}
+             for o in f["objects"] if o.get("track_id") is not None
+         ]}
+        for f in per_frame
     ]
 
     return {
@@ -295,9 +345,22 @@ def analyze_video_objects(
                      "end": window["end"]},
         "objects": objects,
         "tracks": track_list,
+        "track_summary": track_summary,
+        "detections": detections,
+        "frame_width": frame_w,
+        "frame_height": frame_h,
         "evidence": evidence,
         "frames": per_frame,
     }
+
+
+def _normalize_bbox(bbox: list[float], w: int, h: int) -> list[float]:
+    """xyxy pixels -> 0..1 fractions (clamped). Frontend scales to display."""
+    if w <= 0 or h <= 0:
+        return [0.0, 0.0, 0.0, 0.0]
+    x1, y1, x2, y2 = bbox
+    lo = lambda v, m: round(max(0.0, min(1.0, v / m)), 4)
+    return [lo(x1, w), lo(y1, h), lo(x2, w), lo(y2, h)]
 
 
 def write_analysis_json(result: dict[str, Any], out_dir: Path) -> Path:

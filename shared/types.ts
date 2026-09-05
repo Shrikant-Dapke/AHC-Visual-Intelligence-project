@@ -24,6 +24,9 @@ export interface AnalyzeResult {
   timeline: ObjectTimeline | null;
   objects: ObjectCount[];
   tracks: ObjectTrack[];
+  // Task 10: frame-level observations for the overlay + honest counts.
+  track_summary: TrackSummary | null;
+  detections: FrameDetections[];
   evidence: EvidenceItem[];
   warnings: string[];
 }
@@ -113,5 +116,32 @@ export interface ObjectAnalysisResult {
   timeline: ObjectTimeline;
   objects: ObjectCount[];
   tracks: ObjectTrack[];
+  track_summary: TrackSummary | null;
+  detections: FrameDetections[];
   evidence: EvidenceItem[];
+}
+
+// --- Task 10: overlay observations + honest counts (mirrors schemas.py) ---
+
+/** One tracked object in one sampled frame. bbox is xyxy 0..1 fractions. */
+export interface TrackBox {
+  id: number;
+  class: string;
+  confidence: number;
+  bbox: [number, number, number, number];
+}
+
+export interface FrameDetections {
+  timestamp: number;
+  tracks: TrackBox[];
+}
+
+export interface TrackSummary {
+  unique_count: number;
+  active_count: number;
+  longest_seconds: number;
+  largest_movement_px: number;
+  merged_groups: number;
+  total_raw_detections: number;
+  fragmented: boolean;
 }

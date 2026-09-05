@@ -28,10 +28,13 @@ from app.schemas import (
     AnalyzeResult,
     EvidenceItem,
     EventSpan,
+    FrameDetections,
     ObjectCount,
     ObjectTimeline,
     ObjectTrack,
+    TrackBox,
     TrackPoint,
+    TrackSummary,
 )
 from app.services.explain import build_explanation, describe_objects
 from app.services.object_analysis import (
@@ -174,6 +177,8 @@ def run_unified_analysis(saved: Path, job_id: str) -> AnalyzeResult:
     timeline = None
     objects: list[ObjectCount] = []
     tracks: list[ObjectTrack] = []
+    track_summary: TrackSummary | None = None
+    detections: list[FrameDetections] = []
     evidence: list[EvidenceItem] = []
     if obj is not None:
         tl = obj["timeline"]
@@ -191,6 +196,22 @@ def run_unified_analysis(saved: Path, job_id: str) -> AnalyzeResult:
                     TrackPoint(t=p["t"], frame=p["frame"],
                                cx=p["cx"], cy=p["cy"])
                     for p in t["trajectory"]]}))
+        ts = obj.get("track_summary")
+        if ts is not None:
+            track_summary = TrackSummary(
+                unique_count=ts["unique_count"],
+                active_count=ts["active_count"],
+                longest_seconds=ts["longest_seconds"],
+                largest_movement_px=ts["largest_movement_px"],
+                merged_groups=ts["merged_groups"],
+                total_raw_detections=ts["total_raw_detections"],
+                fragmented=ts["fragmented"])
+        for fr in obj.get("detections", []):
+            detections.append(FrameDetections(
+                timestamp=fr["timestamp"],
+                tracks=[TrackBox(id=t["id"], object_class=t["class"],
+                                 confidence=t["confidence"], bbox=t["bbox"])
+                        for t in fr["tracks"]]))
         for ev in obj["evidence"]:
             evidence.append(EvidenceItem(
                 kind=ev["kind"], timestamp=ev["timestamp"],
@@ -225,6 +246,8 @@ def run_unified_analysis(saved: Path, job_id: str) -> AnalyzeResult:
         timeline=timeline,
         objects=objects,
         tracks=tracks,
+        track_summary=track_summary,
+        detections=detections,
         evidence=evidence,
         warnings=warnings,
     )

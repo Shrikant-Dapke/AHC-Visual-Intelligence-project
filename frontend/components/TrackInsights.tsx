@@ -1,15 +1,16 @@
-import type { ObjectTimeline, ObjectTrack } from "../../shared/types";
+import type { ObjectTimeline, ObjectTrack, TrackSummary } from "../../shared/types";
 import { prettyClass } from "../lib/format";
 import { fmtTime } from "./VideoPlayer";
 
 type Props = {
   tracks: ObjectTrack[];
   timeline: ObjectTimeline | null;
+  summary?: TrackSummary | null;
 };
 
 /** Human-readable tracking insights. Every claim derives from the response —
  *  no raw trajectories, no invented events. */
-export default function TrackInsights({ tracks, timeline }: Props) {
+export default function TrackInsights({ tracks, timeline, summary = null }: Props) {
   if (tracks.length === 0) {
     return (
       <div className="section">
@@ -36,9 +37,15 @@ export default function TrackInsights({ tracks, timeline }: Props) {
       <h2 className="section-label">Tracking</h2>
       <div className="stat-rows" style={{ marginTop: 0 }}>
         <div className="stat-row">
-          <span className="k">Persistent tracks</span>
-          <span className="v">{tracks.length}</span>
+          <span className="k">Unique tracked objects</span>
+          <span className="v">{summary?.unique_count ?? tracks.length}</span>
         </div>
+        {summary != null && (
+          <div className="stat-row">
+            <span className="k">Active tracks</span>
+            <span className="v">{summary.active_count}</span>
+          </div>
+        )}
         <div className="stat-row">
           <span className="k">Longest track</span>
           <span className="v">
@@ -59,6 +66,14 @@ export default function TrackInsights({ tracks, timeline }: Props) {
             <span className="v">
               {spanning.length} track{spanning.length === 1 ? "" : "s"} span{" "}
               {fmtTime(timeline.start)}–{fmtTime(timeline.end)}
+            </span>
+          </div>
+        )}
+        {summary != null && summary.fragmented && (
+          <div className="stat-row">
+            <span className="k">Identity notes</span>
+            <span className="v">
+              {summary.merged_groups} fragmented group{summary.merged_groups === 1 ? "" : "s"} stitched
             </span>
           </div>
         )}

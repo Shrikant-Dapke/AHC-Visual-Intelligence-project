@@ -237,6 +237,7 @@ export default function Home() {
             onReset={handleReset}
             onTick={handleTick}
             backendDown={health === "down"}
+            detections={backendResult?.detections ?? []}
           />
           {backendPending && <ProcessingStatus startedAt={backendStartAt} />}
           {showWorkstation && (
@@ -296,6 +297,7 @@ export default function Home() {
               <TrackInsights
                 tracks={backendResult.tracks}
                 timeline={backendResult.timeline ?? null}
+                summary={backendResult.track_summary ?? null}
               />
             )}
             {live.snapshot.samples > 0 && (analyzing || phase === "ANALYSIS_COMPLETE") && (

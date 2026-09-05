@@ -1,7 +1,8 @@
 import type { ObjectCount } from "../../shared/types";
 import { KNOWN_OBJECT_CLASSES, objectLabel } from "../lib/format";
 
-/** Concise object counts. Only real detector counts — never invented. */
+/** Unique tracked objects per class — one count per de-duplicated track
+ *  identity, never one count per frame detection. Only real backend counts. */
 export default function ObjectPanel({ objects }: { objects: ObjectCount[] }) {
   const byClass = new Map(objects.map((o) => [o.class, o.count]));
   const total = objects.reduce((n, o) => n + o.count, 0);
@@ -14,7 +15,11 @@ export default function ObjectPanel({ objects }: { objects: ObjectCount[] }) {
           <small>Nothing above the detection threshold in the analyzed frames.</small>
         </p>
       ) : (
-        <div className="obj-grid">
+        <>
+          <p className="empty-note" style={{ margin: "0 0 8px" }}>
+            {total} unique tracked object{total === 1 ? "" : "s"}
+          </p>
+          <div className="obj-grid">
           {KNOWN_OBJECT_CLASSES.map((cls) => {
             const n = byClass.get(cls) ?? 0;
             return (
@@ -24,7 +29,8 @@ export default function ObjectPanel({ objects }: { objects: ObjectCount[] }) {
               </div>
             );
           })}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

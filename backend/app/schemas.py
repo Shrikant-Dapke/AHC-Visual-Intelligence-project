@@ -106,6 +106,8 @@ class ObjectAnalysisResult(BaseModel):
     timeline: ObjectTimeline
     objects: list[ObjectCount] = []
     tracks: list[ObjectTrack] = []
+    track_summary: TrackSummary | None = None
+    detections: list[FrameDetections] = []
     evidence: list[EvidenceItem] = []
 
 
@@ -130,9 +132,55 @@ class AnalyzeResult(BaseModel):
     timeline: ObjectTimeline | None = None
     objects: list[ObjectCount] = []
     tracks: list[ObjectTrack] = []
+    track_summary: TrackSummary | None = None
+    detections: list[FrameDetections] = []
     evidence: list[EvidenceItem] = []
     warnings: list[str] = []
 
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+# --- Task 10: frame-level tracking observations + honest counts ------------
+# Additive; all optional so old clients keep working. Mirrors
+# shared/types.ts — keep both in sync.
+
+
+class TrackBox(BaseModel):
+    """One tracked object visible in one sampled frame.
+
+    bbox is xyxy in 0..1 fractions of the frame so the frontend overlay
+    stays aligned at any display size. id is the canonical (stitched)
+    track identity shared with ObjectCount.track_ids.
+    """
+
+    id: int
+    object_class: str = Field(alias="class")
+    confidence: float = Field(ge=0.0, le=1.0)
+    bbox: list[float] = Field(min_length=4, max_length=4)
+
+    model_config = {"populate_by_name": True}
+
+
+class FrameDetections(BaseModel):
+    timestamp: float = Field(ge=0)
+    tracks: list[TrackBox] = []
+
+
+class TrackSummary(BaseModel):
+    """Honest tracking statistics.
+
+    unique_count = canonical (de-duplicated) tracks, the basis of the
+    dashboard object counts. fragmented = True means the tracker observed
+    and stitched identity fragmentation, so even this count is a heuristic
+    ("tracked objects"), never a guaranteed physical census.
+    """
+
+    unique_count: int = Field(ge=0)
+    active_count: int = Field(ge=0)
+    longest_seconds: float = Field(ge=0)
+    largest_movement_px: float = Field(ge=0)
+    merged_groups: int = Field(ge=0)
+    total_raw_detections: int = Field(ge=0)
+    fragmented: bool = False
