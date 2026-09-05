@@ -25,6 +25,7 @@ type Props = {
   onReplay: () => void;
   onReset: () => void;
   onTick: (t: number, dur: number) => void;
+  backendDown?: boolean;
 };
 
 export default function VideoWorkspace(props: Props) {
@@ -32,6 +33,7 @@ export default function VideoWorkspace(props: Props) {
     phase, file, previewUrl, error, videoRef,
     analyzing, anomaly, paused, ended, caption,
     onFile, onStart, onStop, onReplay, onReset, onTick,
+    backendDown = false,
   } = props;
   const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
@@ -77,10 +79,10 @@ export default function VideoWorkspace(props: Props) {
             }}
           />
         </div>
-        {error && <div className="error-box">{error}</div>}
-      </div>
-    );
-  }
+      {error && <div className="error-box">{error}</div>}
+    </div>
+  );
+}
 
   let badge: { cls: string; text: string } = { cls: "idle", text: "Ready" };
   if (anomaly && analyzing && !paused) badge = { cls: "anomaly", text: "● Anomaly detected" };
@@ -109,7 +111,7 @@ export default function VideoWorkspace(props: Props) {
 
       <div className="control-row">
         {phase === "VIDEO_READY" && (
-          <button className="btn" onClick={onStart} disabled={!file}>
+          <button className="btn" onClick={onStart} disabled={!file || backendDown}>
             Analyze video
           </button>
         )}
@@ -129,6 +131,9 @@ export default function VideoWorkspace(props: Props) {
       </div>
 
       {error && <div className="error-box">{error}</div>}
+      {backendDown && phase === "VIDEO_READY" && !error && (
+        <div className="error-box">Backend unreachable — start the backend to analyze.</div>
+      )}
     </div>
   );
 }

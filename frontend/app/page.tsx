@@ -8,6 +8,9 @@ import IntelligenceTimeline from "../components/IntelligenceTimeline";
 import EventLog from "../components/EventLog";
 import EvidenceStrip from "../components/EvidenceStrip";
 import AnalysisResult from "../components/AnalysisResult";
+import ObjectPanel from "../components/ObjectPanel";
+import TrackInsights from "../components/TrackInsights";
+import ProcessingStatus from "../components/ProcessingStatus";
 import { isMp4 } from "../lib/format";
 import { useRealtimeVideoAnalysis } from "../hooks/useRealtimeVideoAnalysis";
 import { analyzeVideo, getHealth, type AnalyzeResult as BackendResult } from "../lib/api";
@@ -26,8 +29,10 @@ export default function Home() {
   const [health, setHealth] = useState<"ok" | "down" | "checking">("checking");
   const [labelsConfigured, setLabelsConfigured] = useState<boolean | null>(null);
   const [modelBackend, setModelBackend] = useState("heuristic");
+  const [clipAvailable, setClipAvailable] = useState<boolean | null>(null);
   const [backendResult, setBackendResult] = useState<BackendResult | null>(null);
   const [backendPending, setBackendPending] = useState(false);
+  const [backendStartAt, setBackendStartAt] = useState(0);
 
   const live = useRealtimeVideoAnalysis();
   const analyzing = phase === "ANALYZING";
@@ -39,6 +44,7 @@ export default function Home() {
         setHealth(h.status === "ok" ? "ok" : "down");
         setLabelsConfigured(h.labels_configured);
         setModelBackend(h.model_backend || "heuristic");
+        setClipAvailable(typeof h.clip_available === "boolean" ? h.clip_available : null);
       })
       .catch(() => setHealth("down"));
   }, []);
@@ -105,6 +111,7 @@ export default function Home() {
 
   const runBackend = useCallback((f: File) => {
     setBackendPending(true);
+    setBackendStartAt(Date.now());
     analyzeVideo(f)
       .then(setBackendResult)
       .catch((e) =>
@@ -207,6 +214,7 @@ export default function Home() {
       labelsConfigured={labelsConfigured}
       modelBackend={modelBackend}
       liveActive={analyzing}
+      clipAvailable={clipAvailable}
     >
       <main className="work">
         <div className="col">
@@ -228,13 +236,16 @@ export default function Home() {
             onReplay={handleReplay}
             onReset={handleReset}
             onTick={handleTick}
+            backendDown={health === "down"}
           />
+          {backendPending && <ProcessingStatus startedAt={backendStartAt} />}
           {showWorkstation && (
             <IntelligenceTimeline
               duration={duration}
               currentTime={currentTime}
               liveEvents={live.events}
               backendEvents={backendResult?.events ?? []}
+              window={backendResult?.timeline ?? null}
               onSeek={handleSeek}
             />
           )}
@@ -268,6 +279,7 @@ export default function Home() {
             <EvidenceStrip
               liveEvents={live.events}
               backendUrls={backendResult?.thumbnail_urls ?? []}
+              evidence={backendResult?.evidence ?? []}
               onSeek={handleSeek}
             />
           </div>
@@ -277,6 +289,15 @@ export default function Home() {
               pending={backendPending}
               labelsConfigured={labelsConfigured}
             />
+            {backendResult && backendResult.objects && (
+              <ObjectPanel objects={backendResult.objects} />
+            )}
+            {backendResult && backendResult.tracks && (
+              <TrackInsights
+                tracks={backendResult.tracks}
+                timeline={backendResult.timeline ?? null}
+              />
+            )}
             {live.snapshot.samples > 0 && (analyzing || phase === "ANALYSIS_COMPLETE") && (
               <details className="tech-details">
                 <summary>Technical details</summary>

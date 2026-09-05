@@ -2,11 +2,11 @@
 
 AI-powered road/incident video intelligence — hackathon demo.
 
-Upload an MP4 road/traffic video → get incident class, confidence, event timestamps, timeline visualization, and a deterministic evidence-based explanation.
+Upload an MP4 road/traffic video → get the CLIP incident prediction with confidence and source attribution, YOLO object evidence with tracking, an incident activity window (start/peak/end), pre/peak/post evidence frames, and a deterministic evidence-based explanation — all in a dark dashboard.
 
 ## Hackathon objective
 
-Demo-ready, reliable, and deployable by tomorrow. This scaffold prioritizes a short working demo path over research-grade training: upload → OpenCV sampling → deterministic heuristic inference → dashboard.
+Demo-ready and reliable on a CPU-only laptop. Pipeline: upload → CLIP incident classification (primary) → YOLOv8n object detection + tracking (supporting evidence) → temporal activity window → evidence JPEGs → dashboard. The motion-heuristic baseline remains as an honest fallback when CLIP is unavailable.
 
 ## Architecture
 
@@ -15,10 +15,13 @@ browser (Next.js 14, TS)
   │  POST /api/analyze (multipart .mp4)
   ▼
 FastAPI backend
-  ├─ services/video.py    (cv2.VideoCapture probe + ~1 fps sampling, no ffmpeg)
-  ├─ inference/predict.py (DeterministicHeuristic, replaceable interface)
-  ├─ services/explain.py  (deterministic summary, no LLM yet)
-  └─ api/routes.py        (health / analyze / results/{job_id})
+  ├─ inference/clip.py      (frozen CLIP ViT-B/32 + sklearn head; lazy singleton)
+  ├─ inference/detector.py  (YOLOv8n, CPU, incremental — evidence only)
+  ├─ inference/tracker.py   (IoU default, ByteTrack optional)
+  ├─ services/unified.py    (CLIP verdict + YOLO evidence → AnalyzeResult)
+  ├─ services/video.py      (cv2.VideoCapture probe + sampling, no ffmpeg)
+  ├─ services/explain.py    (deterministic summary, no LLM)
+  └─ api/routes.py          (health / analyze / results/{job_id} / evidence/{job_id}/{kind})
 ```
 
 Frontend talks to the backend only via `NEXT_PUBLIC_API_BASE_URL` (no hardcoded prod URLs).
@@ -27,9 +30,10 @@ Frontend talks to the backend only via `NEXT_PUBLIC_API_BASE_URL` (no hardcoded 
 
 ```
 frontend/  # Next.js App Router dashboard
-backend/   # FastAPI app, video + inference + explain services
+backend/   # FastAPI app, CLIP + YOLO + explain services
 shared/    # types.ts mirroring backend schemas
-docker-compose.yml
+scripts/   # training, CLIP single-video inference, object-analysis CLI
+data/splits/  # versioned train/val manifest (the only committed data)
 ```
 
 ## Local setup
@@ -46,7 +50,9 @@ uvicorn app.main:app --reload --port 8000
 # workdir: backend/
 ```
 
-Health: `http://localhost:8000/api/health`
+Health: `http://localhost:8000/api/health` (also reports `clip_available` / `yolo_available`).
+
+First run downloads YOLOv8n weights once (~6 MB, cached at repo root as `yolov8n.pt`, never committed). CLIP transformer weights (~1.2 GB) resolve from the shared Hugging Face cache when present, otherwise download once on first CLIP inference.
 
 ## Frontend setup
 
@@ -58,52 +64,48 @@ npm run dev --prefix frontend
 
 Set `frontend/.env.local` from `.env.example` if the backend is not on `localhost:8000`.
 
-## Docker setup
+## Model configuration
 
-```powershell
-docker compose up --build
-# frontend http://localhost:3000, backend http://localhost:8000
-```
+All backend paths are overridable via environment (or `backend/.env`, see `backend/.env.example`); relative paths resolve against the repo root:
+
+- `CLIP_MODEL_DIR` (default `models/clip_linear_v1`) — must contain `classifier.joblib` + `labels.json` as written by `scripts/train_clip_classifier.py`. While training is still running the backend reports CLIP as unavailable and falls back honestly — it never fakes predictions.
+- `EVIDENCE_DIR` (default `data/evidence`)
+- `YOLO_ENABLED`, `YOLO_MODEL` (default `yolov8n.pt`), `YOLO_CONF`, `YOLO_IMGSZ`, `YOLO_SAMPLE_FPS` (default `2.0`), `YOLO_TRACKER` (`iou`|`bytetrack`), `YOLO_MAX_FRAMES`
+
+## Demo workflow
+
+1. Open `http://localhost:3000`, drop an MP4 (max 200 MB).
+2. Press **Analyze video** — staged status is shown (no fake percentages; CPU analysis takes ~1–3 min for a short clip once models are warm).
+3. Read the hero: incident class, confidence, and source badge (**CLIP classifier** vs **Motion heuristic** — never confused).
+4. Scrub the incident window (Start—Peak—End chips seek the player), open pre/peak/post evidence, review object counts and track insights.
+
+Small real test clip used for verification: `traffic_accident` video → `vehicle_blocking_traffic` 61.7% (CLIP) with 7 car tracks. Test videos are unlabeled files, so treat demo labels as indicative, not ground truth.
 
 ## API endpoints
 
-- `GET /api/health` → `{ status, model_backend, labels_configured }`
-- `POST /api/analyze` (multipart, field `file`, `.mp4` only) → `AnalyzeResult`
-- `GET /api/results/{job_id}` → stored `AnalyzeResult` (in-memory, no DB)
+- `GET /api/health` → `{ status, model_backend, labels_configured, clip_available, clip_reason, yolo_available, yolo_reason }`
+- `POST /api/analyze` (multipart, field `file`, `.mp4` only) → unified `AnalyzeResult`
+- `GET /api/results/{job_id}` → stored `AnalyzeResult` (in-memory, no DB; survives while the process lives, but the UI does not refetch on page refresh)
+- `GET /api/evidence/{job_id}/{pre|peak|post}` → evidence JPEG (kind-whitelisted, traversal-proof; raw filesystem paths are never exposed)
 
-Result contract:
-
-```json
-{
-  "job_id": "string",
-  "incident_class": "string",
-  "confidence": 0.0,
-  "events": [{ "t_start": 1.2, "t_end": 3.4, "label": "string", "score": 0.8 }],
-  "explanation": "string",
-  "thumbnail_urls": []
-}
-```
+Unified result adds (all backward-compatible): `incident_source` (`clip`|`heuristic`|`none` — YOLO never sets this), `timeline {start,peak,end}`, `objects`, `tracks`, `evidence [{kind,timestamp,url}]`, `warnings`, and `thumbnail_urls` pointing at the evidence routes.
 
 ## ML / inference architecture
 
-Current: `DeterministicHeuristic` in `backend/app/inference/predict.py` — mean absolute frame-difference on 64×64 grayscale samples at ~1 fps, thresholded into temporal spans. Deterministic, offline, no weights, no randomness.
-
-Future: `PretrainedModelInference` (YOLO/CLIP/VideoMAE) implementing the same `predict(frames, duration)` → `InferenceOutput` signature. Swap inside `get_inference()`; routes and frontend do not change.
+- **Incident classifier (primary):** frozen CLIP ViT-B/32 image embeddings (8 time-sampled letterboxed frames, mean-pooled — duration is never a feature) + multinomial logistic regression (`class_weight=balanced`, seed 42). Trained on 2,537 videos, validated on 636: **accuracy 0.8208, macro-F1 0.7333**, 12 classes, 0 failed videos. See `models/clip_linear_v1/metadata.json` and `scripts/train_clip_classifier.py`. Single-video inference: `python scripts/predict_video.py --video path/to/video.mp4`.
+- **Object evidence (supporting):** pretrained YOLOv8n at ~2 fps with IoU tracking (ByteTrack optional). Detects road classes (car/truck/bus/motorcycle/bicycle/person/traffic light/stop sign) and derives an object-activity window plus pre/peak/post frames. YOLO is evidence, not the classifier — it cannot overwrite the CLIP verdict. CLI: `python scripts/analyze_objects.py --video path/to/video.mp4`.
+- **Fallback:** the deterministic motion-energy heuristic (`inference/predict.py`) covers CLIP-unavailable operation and always labels its own verdicts as heuristic.
 
 ## Dataset information
 
 - 3,173 unique training videos, 34 test videos, 12 incident classes (per brief).
-- Videos/weights are NEVER committed (see `.gitignore`).
-- **Labels:** `INCIDENT_CLASSES` in `backend/app/config.py` (and `shared/types.ts`) is intentionally empty until the real `labels.txt` / `classes.txt` / dataset README is supplied. Until then inference honestly returns `incident_class: "unknown"`, confidence `0.0`. Fake class names are not generated.
+- Videos/weights/embeddings are NEVER committed (see `.gitignore`: `data/cache/`, `models/`, `uploads/`, `data/evidence/`, `*.pt`, `*.npz`).
+- **Labels:** the 12 trained class names live in `models/clip_linear_v1/labels.json` (mirrored from the training manifest). `INCIDENT_CLASSES` in `backend/app/config.py` remains the scaffold placeholder and is not on the inference path.
 
 ## Current limitations
 
-- Heuristic motion energy only — not a trained incident classifier.
-- No thumbnails yet (`thumbnail_urls: []`), no auth, no DB (in-memory jobs), uploads deleted after analysis.
-- ~1 fps sampling, 64×64 grayscale, 1200-sample cap per video.
-
-## Future pretrained-model integration
-
-1. Supply the 12 labels → fill `INCIDENT_CLASSES` (both config files).
-2. Add model lib to `backend/requirements.txt`, implement `PretrainedModelInference`.
-3. Set `MODEL_BACKEND` env and map model logits → `InferenceOutput` + keep `explain.py` factual.
+- CPU-only inference: roughly ~20 s one-time CLIP encoder load per process, then ~1–2 s CLIP + ~1–2 s YOLO per short clip warm (far slower cold or on long videos); single-worker requests serialize.
+- Aggregate validation metrics only (accuracy 0.8208 / macro-F1 0.7333 in `metadata.json`); fine-grained failure modes (e.g. smoke vs fire) were not separately quantified — demo labels are indicative.
+- Test videos are unlabeled spot-checks, not a scored set.
+- No auth, no DB (in-memory jobs), uploads deleted after analysis; the dashboard does not restore results on page refresh (refetch via `GET /api/results/{job_id}` works while the backend runs).
+- `docker-compose.yml` predates the ML integration (backend image lacks `scripts/`, model weights, and HF cache; compose also expects a `backend/.env` file). Local virtualenvs are the supported demo path until the Docker context is reworked.

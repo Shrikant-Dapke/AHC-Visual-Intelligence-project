@@ -8,6 +8,47 @@ from app.inference.predict import InferenceOutput
 from app.services.video import VideoMeta
 
 
+def describe_objects(
+    objects: list[dict],
+    n_tracks: int,
+    frames_analyzed: int,
+    sample_fps: float,
+    timeline: dict,
+    detector: dict,
+    yolo_err: str | None = None,
+) -> str:
+    """Deterministic one-to-two-sentence object-evidence summary.
+
+    Factual only: counts/tracks/window come from the actual YOLO run.
+    Never mentions incident classes (YOLO is evidence, not the classifier).
+    """
+    model = detector.get("model", "yolov8n.pt") if detector else "yolov8n.pt"
+    # Display the weights basename only; absolute server paths must never
+    # leak into API responses.
+    model = model.replace("\\", "/").rsplit("/", 1)[-1] or model
+    conf = detector.get("conf", 0.35) if detector else 0.35
+    if yolo_err is not None:
+        return (
+            f"Object evidence unavailable ({yolo_err}); "
+            "no detection/tracking results are reported."
+        )
+    if not objects:
+        return (
+            f"Object evidence ({model}, {frames_analyzed} frames "
+            f"at {sample_fps} fps, confidence {conf}): no road-scene objects "
+            "detected above threshold, so the activity window falls back to "
+            f"the middle third "
+            f"({timeline['start']:.1f}s–{timeline['end']:.1f}s)."
+        )
+    parts = ", ".join(f"{o['count']} {o['class']}" for o in objects)
+    return (
+        f"Object evidence ({model}, {frames_analyzed} frames at "
+        f"{sample_fps} fps): {parts} across {n_tracks} persistent "
+        f"track(s); activity window {timeline['start']:.1f}s–"
+        f"{timeline['end']:.1f}s, peak {timeline['peak']:.1f}s."
+    )
+
+
 def build_explanation(
     incident_class: str,
     confidence: float,

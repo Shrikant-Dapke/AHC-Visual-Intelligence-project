@@ -4,3 +4,14 @@ python-multipart
 opencv-python-headless
 pydantic
 pydantic-settings
+# Task 2: YOLO object detection + tracking (CPU). Pulls the CPU torch build.
+# Pretrained yolov8n weights (~6 MB) auto-download on first run.
+ultralytics>=8.2,<9
+# Task 3: CLIP incident classifier (frozen ViT-B/32 + sklearn linear head).
+# Weights (~350 MB) come from the shared HF cache (already populated by the
+# training venv); classifier.joblib appears when training finishes. Until
+# then the backend reports CLIP as unavailable and never fakes predictions.
+transformers
+huggingface_hub
+scikit-learn
+joblib

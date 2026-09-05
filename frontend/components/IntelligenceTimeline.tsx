@@ -1,6 +1,6 @@
 "use client";
 
-import type { EventSpan } from "../../shared/types";
+import type { EventSpan, ObjectTimeline } from "../../shared/types";
 import type { LiveEvent } from "../hooks/useRealtimeVideoAnalysis";
 
 type Props = {
@@ -8,6 +8,7 @@ type Props = {
   currentTime: number;
   liveEvents: LiveEvent[];
   backendEvents: EventSpan[];
+  window?: ObjectTimeline | null;
   onSeek: (t: number) => void;
 };
 
@@ -22,9 +23,12 @@ export default function IntelligenceTimeline({
   currentTime,
   liveEvents,
   backendEvents,
+  window = null,
   onSeek,
 }: Props) {
   const total = duration > 0 ? duration : 1;
+  const hasWindow =
+    window != null && window.end > window.start && total > 0;
 
   function seekFromClick(e: React.MouseEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -35,7 +39,7 @@ export default function IntelligenceTimeline({
   return (
     <div className="section">
       <h2 className="section-label">Incident timeline</h2>
-      {liveEvents.length === 0 && backendEvents.length === 0 ? (
+      {liveEvents.length === 0 && backendEvents.length === 0 && !hasWindow ? (
         <p className="empty-note">
           No anomalies detected
           <small>The live signal remained below the detection threshold.</small>
@@ -63,6 +67,16 @@ export default function IntelligenceTimeline({
               className="itl-progress"
               style={{ width: `${(Math.min(currentTime, total) / total) * 100}%` }}
             />
+            {hasWindow && window && (
+              <div
+                className="itl-win"
+                style={{
+                  left: `${(Math.max(0, window.start) / total) * 100}%`,
+                  width: `${Math.max(1, ((window.end - window.start) / total) * 100)}%`,
+                }}
+                title={`Activity window ${window.start.toFixed(1)}s–${window.end.toFixed(1)}s`}
+              />
+            )}
             {backendEvents.map((ev, i) => (
               <button
                 key={`b${i}`}
@@ -97,12 +111,39 @@ export default function IntelligenceTimeline({
               className="itl-playhead"
               style={{ left: `${(Math.min(currentTime, total) / total) * 100}%` }}
             />
+            {hasWindow && window && (
+              <div
+                className="itl-peak"
+                style={{ left: `${(Math.min(Math.max(window.peak, 0), total) / total) * 100}%` }}
+                title={`Peak activity ${window.peak.toFixed(1)}s`}
+              />
+            )}
           </div>
           <div className="itl-scale">
             <span>{fmt(0)}</span>
             <span>{fmt(total / 2)}</span>
             <span>{fmt(total)}</span>
           </div>
+          {hasWindow && window && (
+            <div className="win-chips">
+              {(
+                [
+                  ["Start", window.start],
+                  ["Peak", window.peak],
+                  ["End", window.end],
+                ] as const
+              ).map(([label, t]) => (
+                <button
+                  key={label}
+                  className={`win-chip${label === "Peak" ? " peak" : ""}`}
+                  onClick={() => onSeek(t)}
+                  title={`Seek to ${label.toLowerCase()} (${t.toFixed(1)}s)`}
+                >
+                  {label} · {fmt(t)}
+                </button>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

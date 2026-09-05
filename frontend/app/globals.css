@@ -205,3 +205,89 @@ body {
   .work { padding: 20px 16px 8px; }
   .anomaly-num { font-size: 52px; }
 }
+
+/* ---------- incident hero (Task 4) ---------- */
+.src-badge {
+  display: inline-block;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 4px 12px; border-radius: 999px; margin-bottom: 10px;
+}
+.src-clip { color: var(--green); background: rgba(62, 207, 142, 0.1); }
+.src-heuristic { color: var(--amber); background: rgba(245, 165, 36, 0.12); }
+.src-none { color: var(--muted); background: rgba(137, 147, 163, 0.12); }
+.hero-conf { margin: 12px 0 4px; max-width: 280px; }
+.conf-big { font-family: var(--mono); font-size: 40px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+.conf-big small { font-size: 16px; color: var(--faint); font-weight: 400; margin-left: 2px; }
+.meter { position: relative; height: 6px; background: var(--surface-2); border-radius: 3px; margin-top: 10px; overflow: hidden; }
+.meter > div { height: 100%; border-radius: 3px; background: var(--accent); }
+.meter.mid > div { background: var(--amber); }
+.meter.high > div { background: var(--green); }
+.derived { font-size: 13.5px; line-height: 1.65; color: var(--text); margin: 12px 0 0; }
+.warn-box {
+  margin-bottom: 12px; padding: 10px 14px; border-radius: 8px; font-size: 13px;
+  color: #f3cd8a; background: rgba(245, 165, 36, 0.08);
+  border: 1px solid rgba(245, 165, 36, 0.3);
+}
+.warn-box div + div { margin-top: 4px; }
+
+/* ---------- evidence gallery (Task 4) ---------- */
+.ev-item.peak { border-color: var(--accent); width: 172px; }
+.ev-item.peak img { height: 98px; }
+.ev-item .cap { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ev-item .cap strong { font-size: 12px; color: var(--text); font-weight: 600; }
+.ev-item .cap span { font-family: var(--mono); font-size: 11.5px; }
+
+/* ---------- object intelligence (Task 4) ---------- */
+.obj-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.obj-cell {
+  background: var(--surface); border: 1px solid var(--border-soft);
+  border-radius: 10px; padding: 12px 8px; text-align: center;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.obj-cell.zero { opacity: 0.45; }
+.obj-num { font-family: var(--mono); font-size: 24px; font-weight: 700; line-height: 1.1; }
+.obj-name { font-size: 11.5px; color: var(--muted); }
+@media (max-width: 640px) { .obj-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ---------- incident window band (Task 4) ---------- */
+.itl-win {
+  position: absolute; top: 0; bottom: 0;
+  background: rgba(79, 179, 255, 0.18);
+  border-left: 2px solid var(--accent);
+  border-right: 1px solid rgba(79, 179, 255, 0.5);
+  pointer-events: none;
+}
+.itl-peak {
+  position: absolute; top: -1px; bottom: -1px; width: 3px;
+  background: var(--amber); pointer-events: none;
+  box-shadow: 0 0 8px rgba(245, 165, 36, 0.7);
+}
+.win-chips { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.win-chip {
+  appearance: none; background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 999px;
+  font-size: 12px; font-weight: 600; padding: 5px 14px; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.win-chip:hover { border-color: var(--accent); color: var(--text); }
+.win-chip.peak { color: var(--amber); border-color: rgba(245, 165, 36, 0.5); }
+.win-chip.peak:hover { border-color: var(--amber); color: var(--amber); }
+
+/* ---------- processing status (Task 4) ---------- */
+.proc-row { display: flex; gap: 12px; align-items: flex-start; }
+.proc-spinner {
+  width: 18px; height: 18px; flex: none; margin-top: 2px;
+  border-radius: 50%; border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: proc-spin 0.9s linear infinite;
+}
+@keyframes proc-spin { to { transform: rotate(360deg); } }
+.proc-stage { font-size: 13.5px; font-weight: 600; }
+.proc-sub { font-size: 12.5px; color: var(--faint); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.proc-track { position: relative; height: 4px; background: var(--surface-2); border-radius: 2px; margin-top: 14px; overflow: hidden; }
+.proc-fill {
+  position: absolute; top: 0; bottom: 0; width: 30%;
+  background: var(--accent); border-radius: 2px; opacity: 0.8;
+  animation: proc-slide 1.6s ease-in-out infinite alternate;
+}
+@keyframes proc-slide { from { left: -30%; } to { left: 100%; } }

@@ -1,6 +1,6 @@
-import type { AnalyzeResult } from "../../shared/types";
+import type { AnalyzeResult, HealthResponse } from "../../shared/types";
 
-export type { AnalyzeResult };
+export type { AnalyzeResult, HealthResponse };
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 
@@ -20,9 +20,9 @@ async function asJson(res: Response) {
   return data;
 }
 
-export async function getHealth(): Promise<{ status: string; labels_configured: boolean; model_backend: string }> {
+export async function getHealth(): Promise<HealthResponse> {
   const res = await fetch(`${BASE}/api/health`, { cache: "no-store" });
-  return (await asJson(res)) as { status: string; labels_configured: boolean; model_backend: string };
+  return (await asJson(res)) as HealthResponse;
 }
 
 export async function analyzeVideo(file: File): Promise<AnalyzeResult> {
@@ -35,4 +35,12 @@ export async function analyzeVideo(file: File): Promise<AnalyzeResult> {
 export async function getResult(jobId: string): Promise<AnalyzeResult> {
   const res = await fetch(`${BASE}/api/results/${jobId}`, { cache: "no-store" });
   return (await asJson(res)) as AnalyzeResult;
+}
+
+/** Resolve a backend-provided evidence/thumbnail path to a fetchable URL.
+ *  Only backend-provided `url` values are used — never filesystem paths. */
+export function evidenceSrc(url: string | null | undefined): string {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${BASE}${url.startsWith("/") ? url : `/${url}`}`;
 }
