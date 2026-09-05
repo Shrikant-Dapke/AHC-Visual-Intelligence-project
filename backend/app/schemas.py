@@ -59,9 +59,11 @@ class EvidenceItem(BaseModel):
     kind: str  # "pre" | "peak" | "post"
     timestamp: float = Field(ge=0)
     frame_index: int = Field(ge=0)
-    path: str
-    # Task 3: HTTP URL for the frontend (filled by the backend; the raw
-    # filesystem `path` is never exposed over the API).
+    # Internal server path (used for file serving). Excluded from API
+    # responses so server directory layout never leaks to clients.
+    path: str = Field(default="", exclude=True)
+    # Task 3: HTTP URL for the frontend (filled by the backend; clients must
+    # use this, never the filesystem `path`).
     url: str | None = None
 
 

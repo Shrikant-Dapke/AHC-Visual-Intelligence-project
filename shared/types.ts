@@ -75,7 +75,8 @@ export interface EvidenceItem {
   kind: "pre" | "peak" | "post";
   timestamp: number;
   frame_index: number;
-  path: string;
+  // Internal server path; never sent over the API (clients use `url`).
+  path?: string | null;
   // Task 3: HTTP URL for the frontend (raw filesystem `path` is never
   // fetched directly).
   url: string | null;
